@@ -2,70 +2,42 @@
 
 ![Green Grid](assets/greengrid.gif)
 
-Green Grid is a strategic simulation game where players manage a city's renewable energy infrastructure. The goal is to balance power generation with energy consumption while minimizing CO₂ emissions. The game features an interactive isometric tile map, a dynamic day-night cycle, and various renewable energy sources like wind turbines, solar panels, and hydroelectric plants.
+**Green Grid** ist ein strategisches Simulationsspiel, in dem du die Energieversorgung einer wachsenden Stadt nachhaltig gestalten musst. Dein Ziel ist es, durch den geschickten Einsatz erneuerbarer Energiequellen wie Windräder, Solarpaneele und Wasserkraftwerke den Energiebedarf zu decken und CO₂-Emissionen zu minimieren. Gleichzeitig musst du Herausforderungen wie schwankenden Energieverbrauch und wechselnde Wetterbedingungen meistern.
 
 ## Features
 
-- **Strategic Energy Management:** Place and optimize renewable energy sources to power your city efficiently.
-- **Dynamic Isometric Tilemap:** A procedurally generated grid for placing buildings and power sources.
-- **Day-Night Cycle:** A smooth transition between day and night affecting energy production.
-- **Interactive Map Navigation:** Scroll and pan across the map to explore and plan your city.
-- **Smooth UI and Graphics:** Lightweight, optimized for mobile performance.
+- **Strategische Energieplanung** – Setze erneuerbare Energien gezielt ein, um deine Stadt effizient zu versorgen.
+- **Dynamische Stadtkarte** – Eine interaktive Karte, auf der du Energiequellen platzieren und optimieren kannst.
+- **Tag-Nacht-Zyklus** – Verändere deine Strategie basierend auf Tageszeiten und deren Einfluss auf die Energieproduktion.
+- **Herausfordernde Szenarien** – Meistere steigende Energieanforderungen und passe dich an verschiedene Umweltbedingungen an.
+- **Visuelles Feedback** – Behalte den Energieverbrauch und CO₂-Ausstoß im Blick und erlebe, wie sich deine Entscheidungen auf die Stadt auswirken.
 
-## Installation
+## Installation & Spielstart
 
-### Prerequisites
-
-- Java 8+
-- Android Studio (for mobile development)
-- LibGDX framework installed
-
-### Running the Game
-
-1. Clone the repository:
+1. **Projekt klonen**
    ```sh
-   git clone https://github.com/your-repo-name/green-grid.git
+   git clone https://github.com/NeUbiti/GreenGrid.git
    ```
-2. Open the project in **Android Studio** or your preferred IDE.
-3. Build and run the game:
-   ```sh
-   ./gradlew android:installDebug   # For Android
-   ```
+2. **Spiel ausführen**  
+   Öffne das Projekt in **Android Studio** oder einem anderen geeigneten Entwicklungsprogramm und starte das Spiel.
 
-## Gameplay Overview
+## Spielmechanik
 
-### Energy Sources
+- **Erneuerbare Energiequellen**: Nutze Windkraft, Solarenergie und Wasserkraft, um deine Stadt umweltfreundlich mit Strom zu versorgen.
+- **Energiebedarf verwalten**: Die Nachfrage schwankt je nach Tageszeit und Wetter – eine gute Planung ist entscheidend.
+- **CO₂-Emissionen senken**: Ersetze fossile Kraftwerke durch nachhaltige Alternativen, um eine klimaneutrale Stadt zu schaffen.
+- **Speicherung & Effizienz**: Baue Energiespeicher, um Überschüsse zu nutzen und Engpässe auszugleichen.
 
-- **Wind Turbines:** Generate energy based on wind conditions.
-- **Solar Panels:** Work efficiently during daytime, but not at night.
-- **Coal Plants (Starting Energy):** Pollute but provide constant power.
+## Entwicklung & Updates
 
-### Game Mechanics
+Für eine Übersicht über neue Funktionen, Verbesserungen und Fehlerbehebungen, sieh dir die **[CHANGELOG.md](CHANGELOG.md)** an.
 
-- **Energy Demand Fluctuation:** The city's energy consumption varies based on time of day.
-- **Scrolling & Panning:** Drag the screen to navigate the map.
-- **Dynamic Lighting:** The background color changes smoothly based on a sinusoidal day-night cycle.
+## Zukunftspläne
 
-## Saving & Loading Data
+- **Dynamisches Wettersystem** – Wetterbedingungen beeinflussen die Energieproduktion.
+- **Erweiterte Speicherlösungen** – Nutze Batterien, um überschüssige Energie zu speichern.
+- **Neue Technologien** – Erforsche effizientere Energiequellen und erhalte Zugang zu innovativen Lösungen.
 
-- **Settings:** Stored using LibGDX Preferences API.
-- **World Data:** Saved as JSON for easy storage and retrieval.
-- **Binary Save Option:** Optimized storage for large-scale maps.
+## Mitmachen & Feedback
 
-## Roadmap & Future Features
-
-- **Weather System:** Affect wind turbine efficiency.
-- **Energy Storage:** Implement battery storage mechanics.
-- **Advanced Graphics:** Add animation effects to power sources.
-
-## Contributing
-
-Feel free to fork the repository and submit pull requests!
-
-## License
-
-This project is licensed under the MIT License.
-
-## Contact
-
-For questions or feedback, contact [your_email@example.com] or visit [your_project_website].
+Das Projekt ist offen für Ideen und Verbesserungen! Falls du beitragen möchtest oder Feedback hast, schau gerne in das Repository oder kontaktiere uns direkt.
