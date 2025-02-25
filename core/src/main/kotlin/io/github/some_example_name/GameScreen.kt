@@ -6,9 +6,8 @@ import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Animation
-import com.badlogic.gdx.graphics.g2d.BitmapFont
+import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.g2d.TextureRegion
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer
 import com.badlogic.gdx.input.GestureDetector
 import com.badlogic.gdx.math.Vector2
 import kotlin.math.abs
@@ -55,13 +54,12 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     )
 
     private val tileScale = 6f
-    private val font = BitmapFont().apply { data.setScale(3f) }
     private var clickedTileX: Int = 0
     private var clickedTileY: Int = 0
 
     // Offsets for panning the map.
-    private var offsetX = 0f
-    private var offsetY = 0f
+    private var offsetX = Gdx.graphics.width.toFloat() / 2 - 64 * tileScale / 2
+    private var offsetY = Gdx.graphics.height.toFloat() / 2 - 64 * tileScale / 2
 
     // Variables to track initial touch positions and offsets.
     private var initialTouchX = 0f
@@ -78,7 +76,13 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     private var worldTouchX = 0f
     private var worldTouchY = 0f
 
+    // === UI Overlay Integration ===
+    private lateinit var gameUI: GameUI
+    private val uiBatch = SpriteBatch()
+
     override fun show() {
+        // Initialize the UI overlay.
+        gameUI = GameUI()
         // Set up the GestureDetector to capture touch events.
         Gdx.input.inputProcessor = GestureDetector(this)
     }
@@ -115,12 +119,12 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         if (animation != null) {drawAnimTile(animation, elapsedTime, 0, 0)}
 
         val texture = textureMap["grass_0"]
-        val Pos: Vector2 = screenToTile(centerX,centerY)
-        if (texture != null) {drawTile(texture, Pos.x.toInt(), Pos.y.toInt())}
+        val pos: Vector2 = screenToTile(centerX,centerY)
+        if (texture != null) {drawTile(texture, pos.x.toInt(), pos.y.toInt())}
 
         // --- Day / Night Cycle ---
         // Full cycle duration (e.g., 4 minutes)
-        val cycleDuration = 60f * 4f
+        val cycleDuration = 60 * 4f
         // Normalize elapsed time to [0,1]
         val t = (elapsedTime % cycleDuration) / cycleDuration
 
@@ -142,21 +146,14 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
             (1 - alpha) * dayColor.b + alpha * nightColor.b,
             1f
         )
-
         game.batch.color = skyColor
 
-        // Draw a red dot in the middle of the screen
-        val shapeRenderer = ShapeRenderer()
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled)
-        shapeRenderer.color = Color.RED
-        shapeRenderer.circle(centerX, centerY, 2f) // 5f is the radius of the dot
-
-        val tileCoords = screenToTile(centerX, centerY)
-        font.draw(game.batch, "World Pos: (${tileCoords.x}, ${tileCoords.y})", 100f, Gdx.graphics.height - 100f)
-        font.draw(game.batch, "Tile Pos:  (${tileCoords.x.toInt()}, ${tileCoords.y.toInt()})", 100f, Gdx.graphics.height - 200f)
-
-        shapeRenderer.end()
         game.batch.end()
+
+        // Update the UI with current game state values (dummy values here; update as needed).
+        gameUI.updateUI(co2 = 60f, money = 1200, energy = 40f)
+        // Render the UI overlay.
+        gameUI.render(uiBatch)
     }
 
     // Draw a tile given a Texture and tile (grid) coordinates.
@@ -205,7 +202,6 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     override fun resume() { }
     override fun hide() { }
     override fun dispose() {
-        font.dispose()
     }
 
     // GestureDetector callbacks
