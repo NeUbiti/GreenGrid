@@ -2,6 +2,7 @@ package io.github.some_example_name
 
 import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Screen
+import com.badlogic.gdx.audio.Music
 import com.badlogic.gdx.graphics.Color
 import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.Texture
@@ -107,6 +108,14 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     private val uiBatch = SpriteBatch()
     private val testBatch = SpriteBatch()
 
+    // Declare variables to hold your background tracks.
+    private lateinit var gardenMusic: Music
+    private lateinit var windmillMusic: Music
+    private lateinit var coalMusic: Music
+
+    // Holds the currently playing music.
+    private var currentMusic: Music? = null
+
     private var co2 = 0f
     private var money = 0
     private var energy = 0f
@@ -140,6 +149,9 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         testUI = Test()
         // Set up the GestureDetector to capture touch events.
         Gdx.input.inputProcessor = GestureDetector(this)
+
+        loadBackgroundMusic()
+        setBackgroundMusic(gardenMusic)
     }
 
     override fun render(delta: Float) {
@@ -330,6 +342,29 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         return Vector2(tileX, tileY)
     }
 
+    // In your initialization (for example, in your create() method), load the tracks:
+    fun loadBackgroundMusic() {
+        gardenMusic = Gdx.audio.newMusic(Gdx.files.internal("Garden.mp3"))
+        windmillMusic = Gdx.audio.newMusic(Gdx.files.internal("Windmill.mp3"))
+        coalMusic = Gdx.audio.newMusic(Gdx.files.internal("Coal.mp3"))
+
+        // Set looping for all tracks.
+        gardenMusic.isLooping = true
+        windmillMusic.isLooping = true
+        coalMusic.isLooping = true
+    }
+
+    // A helper function to switch background music.
+    fun setBackgroundMusic(track: Music) {
+        // Stop the currently playing track, if any.
+        currentMusic?.stop()
+
+        // Set and play the new track.
+        currentMusic = track
+        currentMusic?.volume = 0.5f  // Adjust volume as needed.
+        currentMusic?.play()
+    }
+
     override fun resize(width: Int, height: Int) { }
     override fun pause() { }
     override fun resume() { }
@@ -340,6 +375,10 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         val json = Json()
         val file = Gdx.files.local("tilemap.json")
         file.writeString(json.toJson(tileMap), false)
+        gardenMusic.dispose()
+        windmillMusic.dispose()
+        coalMusic.dispose()
+        currentMusic?.dispose()
     }
 
     // GestureDetector callbacks
