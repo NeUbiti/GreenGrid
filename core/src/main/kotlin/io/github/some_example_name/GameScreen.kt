@@ -7,26 +7,38 @@ import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Animation
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
+import com.badlogic.gdx.graphics.g2d.TextureAtlas
 import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.input.GestureDetector
 import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.utils.Json
 import kotlin.math.abs
+import kotlin.math.sin
+import kotlin.math.PI
 
 class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListener {
     // === Time & World Settings ===
     private var elapsedTime = 0f
 
-    // New tilemap dimensions
-    private val mapWidth = 32
-    private val mapHeight = 32
+    // Tilemap dimensions.
+    private val mapWidth = 64
+    private val mapHeight = 64
+
+    // How much to move a tile vertically per unit altitude.
+    private val altitudeScale = 16f
+
+    // Seed for noise generation.
+    private val noiseSeed = abs(java.util.Random().nextInt()) % 10000
 
     // === Data Classes ===
-    // Made the fields mutable so we can update animationStateTime.
+    // Now each tile holds altitude, temperature and humidity.
     data class TileData(
         var textureId: String? = null,      // For static tiles.
         var animationId: String? = null,      // For animated tiles.
-        var animationStateTime: Float = 0f    // Tracks the elapsed time for animations.
+        var animationStateTime: Float = 0f,   // Tracks the elapsed time for animations.
+        var altitude: Float = 0f,             // Altitude value for the tile.
+        var temperature: Float = 20f,         // Temperature value for the tile.
+        var humidity: Float = 50f             // Humidity value for the tile.
     )
 
     // The tilemap is a 2D array of TileData.
@@ -34,28 +46,34 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
 
     // === Texture & Animation Setup ===
     // Lookup map for static textures.
-    private val textureMap: Map<String, Texture> = mapOf(
-        "grass_0" to Texture("grass_0.png"),
-        "grass_1" to Texture("grass_1.png"),
-        "grass_2" to Texture("grass_2.png"),
-        "grass_3" to Texture("grass_3.png"),
-        "grass_4" to Texture("grass_4.png"),
-        "grass_5" to Texture("grass_5.png"),
-        "coal_plant_small" to Texture("coal_plant_0.png")
+    // Load your texture atlas (assume you have created one using TexturePacker)
+    private val atlas = TextureAtlas(Gdx.files.internal("textures.atlas"))
+
+    // Create a mapping from texture id to TextureRegion
+    private val textureRegionMap: Map<String, TextureRegion> = mapOf(
+        "grass_0" to atlas.findRegion("grass", 0),
+        "grass_1" to atlas.findRegion("grass", 1),
+        "grass_2" to atlas.findRegion("grass", 2),
+        "grass_3" to atlas.findRegion("grass", 3),
+        "grass_4" to atlas.findRegion("grass", 4),
+        "grass_5" to atlas.findRegion("grass", 5),
+        "coal_plant_small" to atlas.findRegion("coal_plant")
     )
+
     // Define tile dimensions based on one of the grass textures.
-    private val tileWidth = textureMap["grass_0"]!!.width.toFloat()
-    private val tileHeight = textureMap["grass_0"]!!.height.toFloat()
+    private val tileWidth = textureRegionMap["grass_0"]!!.regionWidth.toFloat()
+    private val tileHeight = textureRegionMap["grass_0"]!!.regionHeight.toFloat()
+
 
     // Animation lookup for animated tiles.
     private val animationMap: Map<String, Animation<TextureRegion>> = mapOf(
         "windTurbineAnim" to Animation(
             0.3f,
             com.badlogic.gdx.utils.Array<TextureRegion>().apply {
-                add(TextureRegion(Texture("wind_turbine_small_0.png")))
-                add(TextureRegion(Texture("wind_turbine_small_1.png")))
-                add(TextureRegion(Texture("wind_turbine_small_2.png")))
-                add(TextureRegion(Texture("wind_turbine_small_3.png")))
+                add(atlas.findRegion("wind_turbine_small", 0))
+                add(atlas.findRegion("wind_turbine_small", 1))
+                add(atlas.findRegion("wind_turbine_small", 2))
+                add(atlas.findRegion("wind_turbine_small", 3))
             }
         )
     )
@@ -64,7 +82,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
 
     // Offsets for panning the map.
     private var offsetX = Gdx.graphics.width.toFloat() / 2 - 64 * tileScale / 2
-    private var offsetY = Gdx.graphics.height.toFloat() / 2 - 64 * tileScale / 2
+    private var offsetY = Gdx.graphics.height.toFloat() / 2 - 64 * tileScale / 2 * 32
 
     // Variables to track initial touch positions and offsets.
     private var initialTouchX = 0f
@@ -89,17 +107,33 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     private val uiBatch = SpriteBatch()
     private val testBatch = SpriteBatch()
 
+    private var co2 = 0f
+    private var money = 0
+    private var energy = 0f
+
     override fun show() {
+        for (region in atlas.regions) {
+            region.texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest)
+        }
+
         // Attempt to load the tilemap from a JSON file.
         val file = Gdx.files.local("tilemap.json")
         if (file.exists()) {
             val json = Json()
             tileMap = json.fromJson(Array<Array<TileData>>::class.java, file.readString())
         } else {
-            // Generate a tilemap using Perlin noise.
-            //tileMap = generateTileMapWithPerlinNoise(64, 62, scale = 0.01f)
-            tileMap = Array(mapWidth) { Array(mapHeight) { TileData(textureId = "grass_0") } }
+            // Generate the island using perlin noise.
+            tileMap = generateIslandTileMap(mapWidth, mapHeight)
         }
+
+        tileMap[30][30].animationId = "windTurbineAnim"
+
+        tileMap[30][31].animationId = "windTurbineAnim"
+
+        tileMap[30][32].animationId = "windTurbineAnim"
+
+        tileMap[30][33].animationId = "windTurbineAnim"
+
 
         // Initialize the UI overlay.
         gameUI = GameUI()
@@ -110,39 +144,36 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
 
     override fun render(delta: Float) {
         elapsedTime += delta
-
-        // Clear the screen.
-        Gdx.gl.glClearColor(0f, 0f, 0f, 1f)
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
-
-        // Update the offset based on velocity when not touching.
+        // Update camera offset via panning/inertia...
         if (!Gdx.input.isTouched) {
             offsetX += velocityX * delta
             offsetY += velocityY * delta
-
             velocityX *= 0.9f
             velocityY *= 0.9f
             if (abs(velocityX) < 0.1f) velocityX = 0f
             if (abs(velocityY) < 0.1f) velocityY = 0f
         }
 
+        // Clamp the camera to the tilemap boundaries.
+        clampCamera()
+
         game.batch.begin()
 
         // Iterate over the entire tileMap and draw each tile.
+        // The altitude value is used to offset the tile's Y position.
         for (x in (mapWidth - 1) downTo 0) {
             for (y in (mapHeight - 1) downTo 0) {
                 val tile = tileMap[x][y]
                 if (tile.animationId != null) {
-                    // Update animation state time.
                     tile.animationStateTime += delta
                     val animation = animationMap[tile.animationId]
                     if (animation != null) {
-                        drawAnimTile(animation, tile.animationStateTime, x, y)
+                        drawAnimTile(animation, tile.animationStateTime, x, y, tile.altitude)
                     }
                 } else if (tile.textureId != null) {
-                    val texture = textureMap[tile.textureId]
-                    if (texture != null) {
-                        drawTile(texture, x, y)
+                    val tile = tileMap[x][y]
+                    textureRegionMap[tile.textureId]?.let { region ->
+                        drawTile(region, x, y, tile.altitude)
                     }
                 }
             }
@@ -170,55 +201,123 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         game.batch.end()
 
         // Update and render the UI overlay.
-        testUI.render(testBatch)
+        //testUI.render(testBatch)
+        co2 += 0.01f
+        money += 1
+        energy += 0.1f
 
-        gameUI.updateUI(co2 = 60f, money = 1200, energy = 40f)
+        if (co2 > 1.5f) {co2 = -0.5f}
+
+        gameUI.updateUI(co2, money, energy)
         gameUI.render(uiBatch)
     }
 
-//    private fun generateTileMapWithPerlinNoise(width: Int, height: Int, scale: Float = 0.1f): Array<Array<GameScreen.TileData>> {
-//        val tileMap = Array(width) { Array(height) { GameScreen.TileData() } }
-//        for (x in 0 until width) {
-//            for (y in 0 until height) {
-//                val noiseValue = PerlinNoise.noise(x * scale, y * scale)
-//                // Choose tile type based on noise thresholds
-//                tileMap[x][y] = when {
-//                    noiseValue < 0.3f -> GameScreen.TileData(textureId = "grass_0") // assuming you have a water texture
-//                    noiseValue < 0.6f -> GameScreen.TileData(textureId = "grass_1")  // and a sand texture
-//                    else -> GameScreen.TileData(textureId = "grass_2")
-//                }
-//            }
-//        }
-//        return tileMap
-//    }
+    // Add the clampCamera function.
+    private fun clampCamera() {
+        // Get screen dimensions and the top-right screen corner.
+        val screenWidth = Gdx.graphics.width.toFloat()
+        val screenHeight = Gdx.graphics.height.toFloat()
 
-    // Draw a tile given a Texture and tile (grid) coordinates.
-    private fun drawTile(texture: Texture, tileX: Int, tileY: Int) {
+        val topRightScreen = Vector2(screenWidth, screenHeight)
+        val topRightDistance = screenToTile(topRightScreen.x, topRightScreen.y).x - 64
+        if (topRightDistance > 0) {
+            val topRightOffset = tileToScreenNoOffset(topRightDistance, 0f)
+            offsetX += topRightOffset.x
+            offsetY += topRightOffset.y
+        }
+
+        val topLeftScreen = Vector2(0f, screenHeight)
+        val topLeftDistance = screenToTile(topLeftScreen.x, topLeftScreen.y).y - 64
+        if (topLeftDistance > 0) {
+            val topLeftOffset = tileToScreenNoOffset(0f, topLeftDistance)
+            offsetX += topLeftOffset.x
+            offsetY += topLeftOffset.y
+        }
+
+        val bottomRightScreen = Vector2(screenWidth, 0f)
+        val bottomRightDistance = screenToTile(bottomRightScreen.x, bottomRightScreen.y).y
+        if (bottomRightDistance < 0) {
+            val bottomRightOffset = tileToScreenNoOffset(0f, bottomRightDistance + 1)
+            offsetX += bottomRightOffset.x
+            offsetY += bottomRightOffset.y
+        }
+
+        val bottomLeftScreen = Vector2(0f, 0f)
+        val bottomLeftDistance = screenToTile(bottomLeftScreen.x, bottomLeftScreen.y).x
+        if (bottomLeftDistance < 0) {
+            val bottomLeftOffset = tileToScreenNoOffset(bottomLeftDistance + 1, 0f)
+            offsetX += bottomLeftOffset.x
+            offsetY += bottomLeftOffset.y
+        }
+    }
+
+
+    // Generates a tilemap for an island using a perlin-like noise.
+    private fun generateIslandTileMap(width: Int, height: Int): Array<Array<TileData>> {
+        val map = Array(width) { Array(height) { TileData() } }
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                var noiseValue = 0f
+                // Combine multiple noise layers.
+                for (scale in 1 until 4) {
+                    val scaleFactor = 16f / (scale * scale)
+                    noiseValue += perlin(x.toFloat() / scaleFactor, y.toFloat() / scaleFactor, noiseSeed) / scale
+                }
+                noiseValue += 0.5f
+                // Multiply by sine functions to form an island shape.
+                noiseValue *= sin(PI * x / width).toFloat()
+                noiseValue *= sin(PI * y / height).toFloat()
+
+                // Store the computed altitude in the tile.
+                map[x][y] = TileData(textureId = "grass_${(abs((noiseValue*100).toInt()) % 6)}", altitude = noiseValue)
+                // Optionally adjust other properties based on altitude.
+                map[x][y].temperature = 20f - noiseValue * 5f
+                map[x][y].humidity = 50f + noiseValue * 10f
+            }
+        }
+        return map
+    }
+
+    // A simple pseudo Perlin noise function.
+    private fun perlin(x: Float, y: Float, seed: Int): Float {
+        val value = sin(x * 12.9898f + y * 78.233f + seed) * 43758.5453f
+        return value - value.toInt()
+    }
+
+    // Draws a tile using a Texture, applying a vertical offset from altitude.
+    private fun drawTile(texture: Texture, tileX: Int, tileY: Int, altitude: Float) {
         val pos = tileToScreen(tileX, tileY)
-        game.batch.draw(texture, pos.x, pos.y, tileWidth * tileScale, tileHeight * tileScale)
+        game.batch.draw(texture, pos.x, pos.y + altitude * altitudeScale, tileWidth * tileScale, tileHeight * tileScale)
     }
 
     // Overloaded version for drawing using a TextureRegion.
-    private fun drawTile(textureRegion: TextureRegion, tileX: Int, tileY: Int) {
+    private fun drawTile(textureRegion: TextureRegion, tileX: Int, tileY: Int, altitude: Float) {
         val pos = tileToScreen(tileX, tileY)
-        game.batch.draw(textureRegion, pos.x, pos.y, tileWidth * tileScale, tileHeight * tileScale)
+        game.batch.draw(textureRegion, pos.x, pos.y + altitude * altitudeScale, tileWidth * tileScale, tileHeight * tileScale)
     }
 
-    // Draw a tile given an Animation, current stateTime, and tile (grid) coordinates.
-    private fun drawAnimTile(animation: Animation<TextureRegion>, stateTime: Float, tileX: Int, tileY: Int) {
+    // Draws an animated tile with the altitude offset.
+    private fun drawAnimTile(animation: Animation<TextureRegion>, stateTime: Float, tileX: Int, tileY: Int, altitude: Float) {
         val frame = animation.getKeyFrame(stateTime, true)
         val pos = tileToScreen(tileX, tileY)
-        game.batch.draw(frame, pos.x, pos.y, tileWidth * tileScale, tileHeight * tileScale)
+        game.batch.draw(frame, pos.x, pos.y + altitude * altitudeScale, tileWidth * tileScale, tileHeight * tileScale)
     }
 
-    // Convert from tile (grid) coordinates to screen coordinates.
+    // Converts tile (grid) coordinates to screen coordinates.
     private fun tileToScreen(tileX: Int, tileY: Int): Vector2 {
         val screenX = ((tileX - tileY) * (tileWidth / 2 * tileScale)) + offsetX
         val screenY = ((tileX + tileY) * (tileHeight / 4 * tileScale)) + offsetY
         return Vector2(screenX, screenY)
     }
 
-    // Convert from screen coordinates back to tile (grid) coordinates.
+    // Converts tile (grid) coordinates to screen coordinates without the offset.
+    private fun tileToScreenNoOffset(tileX: Float, tileY: Float): Vector2 {
+        val screenX = (tileX - tileY) * (tileWidth / 2 * tileScale)
+        val screenY = (tileX + tileY) * (tileHeight / 4 * tileScale)
+        return Vector2(screenX, screenY)
+    }
+
+    // Converts screen coordinates back to tile (grid) coordinates.
     private fun screenToTile(screenX: Float, screenY: Float): Vector2 {
         val a = tileWidth / 2 * tileScale
         val b = tileHeight / 4 * tileScale
@@ -236,7 +335,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     override fun resume() { }
     override fun hide() { }
 
-    // When closing the app, save the tileMap to a JSON file.
+    // Save the tilemap to a JSON file when the app is closed.
     override fun dispose() {
         val json = Json()
         val file = Gdx.files.local("tilemap.json")
@@ -254,7 +353,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         lastTouchTime = System.currentTimeMillis()
 
         val cellSize = Vector2(64f * tileScale, 32f * tileScale)
-        // Calculate which tile was touched (this logic may be adjusted based on your isometric projection).
+        // Calculate which tile was touched (this logic may need adjusting for your isometric projection).
         val tileY = (x - offsetX) / cellSize.x + (y - offsetY) / cellSize.y
         val tileX = (y - offsetY) / cellSize.y - (x - offsetX) / cellSize.x
         clickedTileX = tileX.toInt()

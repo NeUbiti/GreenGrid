@@ -22,14 +22,15 @@ class GameUI {
 
     // Load textures from the assets folder.
     private val statsBackground = Texture("stats_background.png")
+    private val co2Bar = Texture("co2_bar.png")
 
     // Load the default font.
     private val font = BitmapFont(Gdx.files.internal("default.fnt"))
 
     // UI state values.
-    private var co2: Float = 50f      // 0 (good) to 100 (bad)
+    private var co2: Float = 1f      // 0 (good) to 1 (bad)
     private var money: Int = 0
-    private var energy: Float = 50f   // 0 (low) to 100 (high)
+    private var energy: Float = 1f   // 0 (too low) to 0.5 (perfect) to 1 (too high)
 
     /**
      * Updates the UI state.
@@ -39,7 +40,9 @@ class GameUI {
      * @param energy The current energy level (0 to 100).
      */
     fun updateUI(co2: Float, money: Int, energy: Float) {
-        this.co2 = co2
+        if (co2 < 0f) {this.co2 = 0f}
+        else if (co2 > 1f) {this.co2 = 1f}
+        else {this.co2 = co2}
         this.money = money
         this.energy = energy
     }
@@ -53,12 +56,29 @@ class GameUI {
     fun render(batch: SpriteBatch) {
         val screenWidth = Gdx.graphics.width.toFloat()
         val screenHeight = Gdx.graphics.height.toFloat()
+
+        val srcWidth = (co2Bar.width * co2).toInt()
+        val drawWidth = srcWidth * scale
+
         val moneyText = "$money$"
         val moneyLayout = GlyphLayout(font, moneyText)
 
         batch.begin()
 
         batch.draw(statsBackground, screenWidth / 2 - statsBackground.width * scale / 2, screenHeight - statsBackground.height * scale, statsBackground.width * scale, statsBackground.height * scale)
+        batch.draw(
+            co2Bar,
+            screenWidth / 2 - statsBackground.width * scale / 2 + 27 * scale, // x-position
+            screenHeight - (statsBackground.height - 9) * scale,              // y-position
+            drawWidth,                                                       // drawn width
+            co2Bar.height * scale,                                             // drawn height
+            0,                                                               // srcX: start at left edge of the texture
+            0,                                                               // srcY: start at the top (or bottom if your origin is different)
+            srcWidth,                                                        // srcWidth: the portion to draw
+            co2Bar.height,                                                   // srcHeight: full height of the texture
+            false,                                                           // flipX
+            false                                                            // flipY
+        )
 
         val textX = screenWidth / 2 - 22 * scale
         val textY = screenHeight - 12 * scale + moneyLayout.height / 2
