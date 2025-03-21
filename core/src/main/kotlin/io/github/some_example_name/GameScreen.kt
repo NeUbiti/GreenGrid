@@ -4,7 +4,6 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Screen
 import com.badlogic.gdx.audio.Music
 import com.badlogic.gdx.graphics.Color
-import com.badlogic.gdx.graphics.GL20
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Animation
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
@@ -44,6 +43,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
 
     // The tilemap is a 2D array of TileData.
     private lateinit var tileMap: Array<Array<TileData>>
+    private val buildingCountMap = mutableMapOf<String, Int>()
 
     // === Texture & Animation Setup ===
     // Lookup map for static textures.
@@ -57,8 +57,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         "grass_2" to atlas.findRegion("grass", 2),
         "grass_3" to atlas.findRegion("grass", 3),
         "grass_4" to atlas.findRegion("grass", 4),
-        "grass_5" to atlas.findRegion("grass", 5),
-        "coal_plant_small" to atlas.findRegion("coal_plant")
+        "grass_5" to atlas.findRegion("grass", 5)
     )
 
     // Define tile dimensions based on one of the grass textures.
@@ -68,13 +67,32 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
 
     // Animation lookup for animated tiles.
     private val animationMap: Map<String, Animation<TextureRegion>> = mapOf(
-        "windTurbineAnim" to Animation(
+        "windTurbine" to Animation(
             0.3f,
             com.badlogic.gdx.utils.Array<TextureRegion>().apply {
                 add(atlas.findRegion("wind_turbine_small", 0))
                 add(atlas.findRegion("wind_turbine_small", 1))
                 add(atlas.findRegion("wind_turbine_small", 2))
                 add(atlas.findRegion("wind_turbine_small", 3))
+            }
+        ),
+        "coalPlant" to Animation(
+            0.3f,
+            com.badlogic.gdx.utils.Array<TextureRegion>().apply {
+                add(atlas.findRegion("coal_plant", 0))
+            }
+        )
+    )
+
+    // Animation lookup for animated tiles.
+    private val animationLightMap: Map<String, Animation<TextureRegion>> = mapOf(
+        "coalPlant" to Animation(
+            0.15f,
+            com.badlogic.gdx.utils.Array<TextureRegion>().apply {
+                // Load all frames of the flames animation from your atlas.
+                for (i in 1..17) {
+                    add(atlas.findRegion("coal_plant_flames", i))
+                }
             }
         )
     )
@@ -107,18 +125,17 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     private lateinit var testUI: Test
     private val uiBatch = SpriteBatch()
     private val testBatch = SpriteBatch()
+    private val lightBatch = SpriteBatch()
 
     // Declare variables to hold your background tracks.
-    private lateinit var gardenMusic: Music
-    private lateinit var windmillMusic: Music
-    private lateinit var coalMusic: Music
-
-    // Holds the currently playing music.
-    private var currentMusic: Music? = null
+    private lateinit var musicPlaylist: List<Music>
+    private var currentTrackIndex = 0
 
     private var co2 = 0f
     private var money = 0
     private var energy = 0f
+    private var hasBatteries = false
+    private var battery = 0f
 
     override fun show() {
         for (region in atlas.regions) {
@@ -135,23 +152,20 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
             tileMap = generateIslandTileMap(mapWidth, mapHeight)
         }
 
-        tileMap[30][30].animationId = "windTurbineAnim"
-
-        tileMap[30][31].animationId = "windTurbineAnim"
-
-        tileMap[30][32].animationId = "windTurbineAnim"
-
-        tileMap[30][33].animationId = "windTurbineAnim"
+        placeBuilding("windTurbine")
 
 
         // Initialize the UI overlay.
         gameUI = GameUI()
+        gameUI.onPlaceBuilding = { buildingTile ->
+            placeBuilding(buildingTile)}
+
         testUI = Test()
         // Set up the GestureDetector to capture touch events.
         Gdx.input.inputProcessor = GestureDetector(this)
 
         loadBackgroundMusic()
-        setBackgroundMusic(gardenMusic)
+        startPlaylist()
     }
 
     override fun render(delta: Float) {
@@ -212,15 +226,41 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
 
         game.batch.end()
 
+        // Draw the coal plant flames (or other lighting effects) using the light batch.
+        lightBatch.begin()
+        // Make sure the light batch uses white (or any color you want) so it's not tinted.
+        lightBatch.color = Color.WHITE
+        // Iterate again over the tileMap to draw extra effects for coal plants.
+        for (x in 0 until mapWidth) {
+            for (y in 0 until mapHeight) {
+                val tile = tileMap[x][y]
+                if (tile.animationId == "coalPlant") {
+                    // Draw the flames animation for the coal plant.
+                    val flamesAnimation = animationLightMap["coalPlant"]
+                    if (flamesAnimation != null) {
+                        // You can use the same state time from the tile.
+                        val pos = tileToScreen(x, y)
+                        val frame = flamesAnimation.getKeyFrame(tile.animationStateTime, true)
+                        lightBatch.draw(frame, pos.x, pos.y + tile.altitude * altitudeScale, frame.regionWidth * tileScale, frame.regionHeight * tileScale)
+                    }
+                }
+            }
+        }
+        lightBatch.end()
+
         // Update and render the UI overlay.
         //testUI.render(testBatch)
         co2 += 0.01f
         money += 1
-        energy += 0.1f
+        energy += 0.01f
+        hasBatteries = true
+        battery += 0.001f
 
         if (co2 > 1.5f) {co2 = -0.5f}
+        if (energy > 1.5f) {energy = -0.5f}
+        if (battery > 1.5f) {battery = -0.5f}
 
-        gameUI.updateUI(co2, money, energy)
+        gameUI.updateUI(co2, money, energy, hasBatteries, battery)
         gameUI.render(uiBatch)
     }
 
@@ -230,32 +270,28 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         val screenWidth = Gdx.graphics.width.toFloat()
         val screenHeight = Gdx.graphics.height.toFloat()
 
-        val topRightScreen = Vector2(screenWidth, screenHeight)
-        val topRightDistance = screenToTile(topRightScreen.x, topRightScreen.y).x - 64
+        val topRightDistance = screenToTile(screenWidth, screenHeight).x - 64
         if (topRightDistance > 0) {
             val topRightOffset = tileToScreenNoOffset(topRightDistance, 0f)
             offsetX += topRightOffset.x
             offsetY += topRightOffset.y
         }
 
-        val topLeftScreen = Vector2(0f, screenHeight)
-        val topLeftDistance = screenToTile(topLeftScreen.x, topLeftScreen.y).y - 64
+        val topLeftDistance = screenToTile(0f, screenHeight).y - 64
         if (topLeftDistance > 0) {
             val topLeftOffset = tileToScreenNoOffset(0f, topLeftDistance)
             offsetX += topLeftOffset.x
             offsetY += topLeftOffset.y
         }
 
-        val bottomRightScreen = Vector2(screenWidth, 0f)
-        val bottomRightDistance = screenToTile(bottomRightScreen.x, bottomRightScreen.y).y
+        val bottomRightDistance = screenToTile(screenWidth, 0f).y
         if (bottomRightDistance < 0) {
             val bottomRightOffset = tileToScreenNoOffset(0f, bottomRightDistance + 1)
             offsetX += bottomRightOffset.x
             offsetY += bottomRightOffset.y
         }
 
-        val bottomLeftScreen = Vector2(0f, 0f)
-        val bottomLeftDistance = screenToTile(bottomLeftScreen.x, bottomLeftScreen.y).x
+        val bottomLeftDistance = screenToTile(0f, 0f).x
         if (bottomLeftDistance < 0) {
             val bottomLeftOffset = tileToScreenNoOffset(bottomLeftDistance + 1, 0f)
             offsetX += bottomLeftOffset.x
@@ -342,27 +378,82 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         return Vector2(tileX, tileY)
     }
 
-    // In your initialization (for example, in your create() method), load the tracks:
+    // Call this method (e.g., from your create() method) to load the tracks.
     fun loadBackgroundMusic() {
-        gardenMusic = Gdx.audio.newMusic(Gdx.files.internal("Garden.mp3"))
-        windmillMusic = Gdx.audio.newMusic(Gdx.files.internal("Windmill.mp3"))
-        coalMusic = Gdx.audio.newMusic(Gdx.files.internal("Coal.mp3"))
+        val gardenMusic = Gdx.audio.newMusic(Gdx.files.internal("Garden.mp3"))
+        val windmillMusic = Gdx.audio.newMusic(Gdx.files.internal("Windmill.mp3"))
+        val coalMusic = Gdx.audio.newMusic(Gdx.files.internal("Coal.mp3"))
 
-        // Set looping for all tracks.
-        gardenMusic.isLooping = true
-        windmillMusic.isLooping = true
-        coalMusic.isLooping = true
+        // Set looping to false because we want each track to finish completely.
+        gardenMusic.isLooping = false
+        windmillMusic.isLooping = false
+        coalMusic.isLooping = false
+
+        // Create the playlist.
+        musicPlaylist = listOf(windmillMusic, gardenMusic, coalMusic)
+
+        // Set an on-completion listener for each track.
+        musicPlaylist.forEach { music ->
+            music.setOnCompletionListener { playNextTrack() }
+        }
     }
 
-    // A helper function to switch background music.
-    fun setBackgroundMusic(track: Music) {
-        // Stop the currently playing track, if any.
-        currentMusic?.stop()
+    // Starts the playlist from the beginning.
+    fun startPlaylist() {
+        currentTrackIndex = 0
+        musicPlaylist[currentTrackIndex].volume = 0.5f  // Adjust volume if needed.
+        musicPlaylist[currentTrackIndex].play()
+    }
 
-        // Set and play the new track.
-        currentMusic = track
-        currentMusic?.volume = 0.5f  // Adjust volume as needed.
-        currentMusic?.play()
+    // This method is called when a track finishes playing.
+    fun playNextTrack() {
+        // Stop current track if it's still running.
+        musicPlaylist[currentTrackIndex].stop()
+
+        // Increment the index, looping back to 0 when at the end.
+        currentTrackIndex = (currentTrackIndex + 1) % musicPlaylist.size
+
+        // Play the next track.
+        musicPlaylist[currentTrackIndex].volume = 0.5f  // Adjust volume if needed.
+        musicPlaylist[currentTrackIndex].play()
+    }
+
+    /**
+     * Places a building on the tile at (clickedTileX, clickedTileY).
+     * The provided buildingTile string is assigned to tileMap[clickedTileX][clickedTileY].animationId.
+     * The count for that building type is incremented in buildingCountMap.
+     *
+     * @param buildingTile The identifier of the building (e.g., "windTurbineAnim", "solarPanelAnim").
+     */
+    fun placeBuilding(buildingTile: String) {
+        Gdx.app.log("placeBuilding", buildingTile)
+        // Ensure that the clicked tile coordinates are within the tilemap bounds.
+        if (clickedTileX in 0 until mapWidth && clickedTileY in 0 until mapHeight) {
+            tileMap[clickedTileX][clickedTileY].animationId = buildingTile
+            buildingCountMap[buildingTile] = buildingCountMap.getOrDefault(buildingTile, 0) + 1
+        }
+    }
+
+    /**
+     * Removes a building from the tile at (clickedTileX, clickedTileY).
+     * This sets the tile's animationId to null (removing the building) and decrements the count for that building type.
+     *
+     * @param buildingTile The identifier of the building to remove.
+     */
+    fun removeBuilding(buildingTile: String) {
+        if (clickedTileX in 0 until mapWidth && clickedTileY in 0 until mapHeight) {
+            // Remove the building from the tile.
+            tileMap[clickedTileX][clickedTileY].animationId = null
+
+            // Decrement the count in the buildingCountMap.
+            if (buildingCountMap.containsKey(buildingTile)) {
+                buildingCountMap[buildingTile] = buildingCountMap[buildingTile]!! - 1
+                // If the count drops to zero, remove the key.
+                if (buildingCountMap[buildingTile]!! <= 0) {
+                    buildingCountMap.remove(buildingTile)
+                }
+            }
+        }
     }
 
     override fun resize(width: Int, height: Int) { }
@@ -375,10 +466,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         val json = Json()
         val file = Gdx.files.local("tilemap.json")
         file.writeString(json.toJson(tileMap), false)
-        gardenMusic.dispose()
-        windmillMusic.dispose()
-        coalMusic.dispose()
-        currentMusic?.dispose()
+        musicPlaylist.forEach { it.dispose() }
     }
 
     // GestureDetector callbacks
@@ -390,13 +478,13 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         lastTouchX = x
         lastTouchY = y
         lastTouchTime = System.currentTimeMillis()
+        val screenWidth = Gdx.graphics.width.toFloat()
+        val screenHeight = Gdx.graphics.height.toFloat()
 
-        val cellSize = Vector2(64f * tileScale, 32f * tileScale)
-        // Calculate which tile was touched (this logic may need adjusting for your isometric projection).
-        val tileY = (x - offsetX) / cellSize.x + (y - offsetY) / cellSize.y
-        val tileX = (y - offsetY) / cellSize.y - (x - offsetX) / cellSize.x
-        clickedTileX = tileX.toInt()
-        clickedTileY = tileY.toInt()
+        val tilePos = screenToTile(x,screenHeight - y)
+
+        clickedTileX = tilePos.x.toInt()
+        clickedTileY = tilePos.y.toInt()
 
         return true
     }
