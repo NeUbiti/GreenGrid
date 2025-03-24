@@ -183,32 +183,10 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         // Clamp the camera to the tilemap boundaries.
         clampCamera()
 
-        game.batch.begin()
-
-        // Iterate over the entire tileMap and draw each tile.
-        // The altitude value is used to offset the tile's Y position.
-        for (x in (mapWidth - 1) downTo 0) {
-            for (y in (mapHeight - 1) downTo 0) {
-                val tile = tileMap[x][y]
-                if (tile.animationId != null) {
-                    tile.animationStateTime += delta
-                    val animation = animationMap[tile.animationId]
-                    if (animation != null) {
-                        drawAnimTile(animation, tile.animationStateTime, x, y, tile.altitude)
-                    }
-                } else if (tile.textureId != null) {
-                    val tile = tileMap[x][y]
-                    textureRegionMap[tile.textureId]?.let { region ->
-                        drawTile(region, x, y, tile.altitude)
-                    }
-                }
-            }
-        }
-
-        // --- Day / Night Cycle Overlay (example) ---
-        val cycleDuration = 60 * 4f // 4-minute full cycle.
+        // Compute the day/night cycle parameters outside the batch blocks.
+        val cycleDuration = 10f
         val t = (elapsedTime % cycleDuration) / cycleDuration
-        val alpha = when {
+        val dayNightAlpha = when {
             t < 0.5f -> 0f
             t < 0.6f -> ((t - 0.5f) / 0.1f)
             t < 0.85f -> 1f
@@ -217,28 +195,59 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         val dayColor = Color(1f, 1f, 1f, 1f)
         val nightColor = Color(0.4f, 0.4f, 0.7f, 1f)
         val skyColor = Color(
-            (1 - alpha) * dayColor.r + alpha * nightColor.r,
-            (1 - alpha) * dayColor.g + alpha * nightColor.g,
-            (1 - alpha) * dayColor.b + alpha * nightColor.b,
+            (1 - dayNightAlpha) * dayColor.r + dayNightAlpha * nightColor.r,
+            (1 - dayNightAlpha) * dayColor.g + dayNightAlpha * nightColor.g,
+            (1 - dayNightAlpha) * dayColor.b + dayNightAlpha * nightColor.b,
             1f
         )
-        game.batch.color = skyColor
+
+        game.batch.begin()
+
+        // Iterate over the entire tileMap.
+        for (x in (mapWidth - 1) downTo 0) {
+            for (y in (mapHeight - 1) downTo 0) {
+                val tile = tileMap[x][y]
+                // Compute the per-tile tint based on temperature and humidity.
+                val tint = computeTint(tile.temperature, tile.humidity)
+                // Combine the tile tint with the sky color.
+                val combinedTint = tint.cpy().mul(skyColor)
+                // Save the current batch color.
+                val originalColor = game.batch.color.cpy()
+                // Set the batch color to the combined tint.
+                game.batch.color = combinedTint
+
+                if (tile.animationId != null) {
+                    tile.animationStateTime += delta
+                    val animation = animationMap[tile.animationId]
+                    if (animation != null) {
+                        drawAnimTile(animation, tile.animationStateTime, x, y, tile.altitude)
+                    }
+                } else if (tile.textureId != null) {
+                    textureRegionMap[tile.textureId]?.let { region ->
+                        drawTile(region, x, y, tile.altitude)
+                    }
+                }
+                // Restore the original color.
+                game.batch.color = originalColor
+            }
+        }
 
         game.batch.end()
 
-        // Draw the coal plant flames (or other lighting effects) using the light batch.
+
+        // Now adjust the flame rendering using the same day/night cycle.
+        // Here, the flameAlpha is computed to be lower during the day (e.g., 0.3) and higher at night.
+        val flameAlpha = 0.8f + 0.2f * dayNightAlpha
+
         lightBatch.begin()
-        // Make sure the light batch uses white (or any color you want) so it's not tinted.
-        lightBatch.color = Color.WHITE
-        // Iterate again over the tileMap to draw extra effects for coal plants.
+        // Set the light batch's color with the computed flameAlpha.
+        lightBatch.color = Color(1f, 1f, 1f, flameAlpha)
         for (x in 0 until mapWidth) {
             for (y in 0 until mapHeight) {
                 val tile = tileMap[x][y]
                 if (tile.animationId == "coalPlant") {
-                    // Draw the flames animation for the coal plant.
                     val flamesAnimation = animationLightMap["coalPlant"]
                     if (flamesAnimation != null) {
-                        // You can use the same state time from the tile.
                         val pos = tileToScreen(x, y)
                         val frame = flamesAnimation.getKeyFrame(tile.animationStateTime, true)
                         lightBatch.draw(frame, pos.x, pos.y + tile.altitude * altitudeScale, frame.regionWidth * tileScale, frame.regionHeight * tileScale)
@@ -305,22 +314,37 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         val map = Array(width) { Array(height) { TileData() } }
         for (x in 0 until width) {
             for (y in 0 until height) {
-                var noiseValue = 0f
+                var altValue = 0f
                 // Combine multiple noise layers.
                 for (scale in 1 until 4) {
                     val scaleFactor = 16f / (scale * scale)
-                    noiseValue += perlin(x.toFloat() / scaleFactor, y.toFloat() / scaleFactor, noiseSeed) / scale
+                    altValue += perlin(x.toFloat() / scaleFactor, y.toFloat() / scaleFactor, noiseSeed * 10 + 0) / scale
                 }
-                noiseValue += 0.5f
+                altValue += 0.5f
                 // Multiply by sine functions to form an island shape.
-                noiseValue *= sin(PI * x / width).toFloat()
-                noiseValue *= sin(PI * y / height).toFloat()
+                altValue *= sin(PI * x / width).toFloat()
+                altValue *= sin(PI * y / height).toFloat()
 
                 // Store the computed altitude in the tile.
-                map[x][y] = TileData(textureId = "grass_${(abs((noiseValue*100).toInt()) % 6)}", altitude = noiseValue)
-                // Optionally adjust other properties based on altitude.
-                map[x][y].temperature = 20f - noiseValue * 5f
-                map[x][y].humidity = 50f + noiseValue * 10f
+                map[x][y] = TileData(textureId = "grass_${(abs((altValue*100).toInt()) % 6)}", altitude = altValue)
+
+                var tempValue = 0f
+                // Combine multiple noise layers.
+                for (scale in 1 until 4) {
+                    val scaleFactor = 16f / (scale * scale)
+                    tempValue += perlin(x.toFloat() / scaleFactor, y.toFloat() / scaleFactor, noiseSeed * 10 + 1) / scale
+                }
+                tempValue += 0.5f
+                map[x][y].temperature = 20f - tempValue * 5f
+
+                var humValue = 0f
+                // Combine multiple noise layers.
+                for (scale in 1 until 4) {
+                    val scaleFactor = 16f / (scale * scale)
+                    humValue += perlin(x.toFloat() / scaleFactor, y.toFloat() / scaleFactor, noiseSeed * 10 + 2) / scale
+                }
+                humValue += 0.5f
+                map[x][y].humidity = 50f + humValue * 10f
             }
         }
         return map
@@ -331,6 +355,27 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         val value = sin(x * 12.9898f + y * 78.233f + seed) * 43758.5453f
         return value - value.toInt()
     }
+
+    // Computes a tint based on temperature and humidity.
+    // Here we assume 20°C and 50% humidity as baselines.
+    // Warmer temperatures slightly boost red while cooler ones boost blue.
+    // Higher humidity adds a slight green tint.
+    private fun computeTint(temperature: Float, humidity: Float): Color {
+        val tempFactor = (temperature - 20f) / 20f  // deviation from 20°C
+        val humFactor = (humidity - 50f) / 50f        // deviation from 50%
+
+        // Adjustments are kept small (max ±0.1)
+        val redAdjustment = tempFactor * 0.3f
+        val blueAdjustment = -tempFactor * 0.3f
+        val greenAdjustment = humFactor * 0.3f
+
+        val r = (1f + redAdjustment).coerceIn(0f, 1f)
+        val g = (1f + greenAdjustment).coerceIn(0f, 1f)
+        val b = (1f + blueAdjustment).coerceIn(0f, 1f)
+
+        return Color(r, g, b, 1f)
+    }
+
 
     // Draws a tile using a Texture, applying a vertical offset from altitude.
     private fun drawTile(texture: Texture, tileX: Int, tileY: Int, altitude: Float) {
@@ -428,8 +473,9 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     fun placeBuilding(buildingTile: String) {
         Gdx.app.log("placeBuilding", buildingTile)
         // Ensure that the clicked tile coordinates are within the tilemap bounds.
-        if (clickedTileX in 0 until mapWidth && clickedTileY in 0 until mapHeight) {
-            tileMap[clickedTileX][clickedTileY].animationId = buildingTile
+        val clickedTile = screenToTile(Gdx.graphics.width.toFloat()/2, Gdx.graphics.height.toFloat()/2)
+        if (clickedTile.x.toInt() in 0 until mapWidth && clickedTile.y.toInt() in 0 until mapHeight) {
+            tileMap[clickedTile.x.toInt()][clickedTile.y.toInt()].animationId = buildingTile
             buildingCountMap[buildingTile] = buildingCountMap.getOrDefault(buildingTile, 0) + 1
         }
     }
@@ -471,6 +517,9 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
 
     // GestureDetector callbacks
     override fun touchDown(x: Float, y: Float, pointer: Int, button: Int): Boolean {
+        // Only process the first touch
+        if (pointer != 0) return false
+
         initialTouchX = x
         initialTouchY = y
         initialOffsetX = offsetX
@@ -478,32 +527,30 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         lastTouchX = x
         lastTouchY = y
         lastTouchTime = System.currentTimeMillis()
-        val screenWidth = Gdx.graphics.width.toFloat()
-        val screenHeight = Gdx.graphics.height.toFloat()
-
-        val tilePos = screenToTile(x,screenHeight - y)
-
-        clickedTileX = tilePos.x.toInt()
-        clickedTileY = tilePos.y.toInt()
 
         return true
     }
 
+
     override fun pan(x: Float, y: Float, deltaX: Float, deltaY: Float): Boolean {
-        offsetX = initialOffsetX + (x - initialTouchX)
-        offsetY = initialOffsetY - (y - initialTouchY)
+        if (gameUI.isMenuOpen()) return false
+
+        // Incrementally update the offset.
+        offsetX += deltaX
+        offsetY -= deltaY
 
         val currentTime = System.currentTimeMillis()
         val dt = (currentTime - lastTouchTime) / 1000f
         if (dt > 0) {
-            velocityX = (x - lastTouchX) / dt
-            velocityY = -(y - lastTouchY) / dt
+            velocityX = deltaX / dt
+            velocityY = -deltaY / dt
         }
         lastTouchX = x
         lastTouchY = y
         lastTouchTime = currentTime
         return true
     }
+
 
     override fun fling(velX: Float, velY: Float, button: Int): Boolean = false
     override fun tap(x: Float, y: Float, count: Int, button: Int): Boolean = false

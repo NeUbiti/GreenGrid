@@ -100,6 +100,11 @@ class GameUI {
         }
     }
 
+    fun isMenuOpen(): Boolean {
+        return buildingMenuOpen
+    }
+
+
     /**
      * Renders the UI overlay.
      *
