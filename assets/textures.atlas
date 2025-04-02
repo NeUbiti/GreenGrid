@@ -1,5 +1,5 @@
 textures.png
-size: 512, 260
+size: 256, 584
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
@@ -40,161 +40,168 @@ coal_plant_flames
   index: 4
 coal_plant_flames
   rotate: false
-  xy: 244, 0
-  size: 45, 98
-  orig: 45, 98
-  offset: 0, 0
-  index: 5
-coal_plant_flames
-  rotate: false
-  xy: 289, 0
-  size: 45, 98
-  orig: 45, 98
-  offset: 0, 0
-  index: 6
-coal_plant_flames
-  rotate: false
-  xy: 334, 0
-  size: 45, 98
-  orig: 45, 98
-  offset: 0, 0
-  index: 7
-coal_plant_flames
-  rotate: false
-  xy: 379, 0
-  size: 45, 98
-  orig: 45, 98
-  offset: 0, 0
-  index: 8
-coal_plant_flames
-  rotate: false
-  xy: 424, 0
-  size: 45, 98
-  orig: 45, 98
-  offset: 0, 0
-  index: 9
-coal_plant_flames
-  rotate: false
   xy: 0, 98
   size: 45, 98
   orig: 45, 98
   offset: 0, 0
-  index: 10
+  index: 5
 coal_plant_flames
   rotate: false
   xy: 45, 98
   size: 45, 98
   orig: 45, 98
   offset: 0, 0
-  index: 11
+  index: 6
 coal_plant_flames
   rotate: false
   xy: 90, 98
   size: 45, 98
   orig: 45, 98
   offset: 0, 0
-  index: 12
+  index: 7
 coal_plant_flames
   rotate: false
   xy: 135, 98
   size: 45, 98
   orig: 45, 98
   offset: 0, 0
-  index: 13
+  index: 8
 coal_plant_flames
   rotate: false
   xy: 180, 98
   size: 45, 98
   orig: 45, 98
   offset: 0, 0
+  index: 9
+coal_plant_flames
+  rotate: false
+  xy: 0, 196
+  size: 45, 98
+  orig: 45, 98
+  offset: 0, 0
+  index: 10
+coal_plant_flames
+  rotate: false
+  xy: 45, 196
+  size: 45, 98
+  orig: 45, 98
+  offset: 0, 0
+  index: 11
+coal_plant_flames
+  rotate: false
+  xy: 90, 196
+  size: 45, 98
+  orig: 45, 98
+  offset: 0, 0
+  index: 12
+coal_plant_flames
+  rotate: false
+  xy: 135, 196
+  size: 45, 98
+  orig: 45, 98
+  offset: 0, 0
+  index: 13
+coal_plant_flames
+  rotate: false
+  xy: 180, 196
+  size: 45, 98
+  orig: 45, 98
+  offset: 0, 0
   index: 14
 coal_plant_flames
   rotate: false
-  xy: 225, 98
+  xy: 0, 294
   size: 45, 98
   orig: 45, 98
   offset: 0, 0
   index: 15
 coal_plant_flames
   rotate: false
-  xy: 270, 98
+  xy: 45, 294
   size: 45, 98
   orig: 45, 98
   offset: 0, 0
   index: 16
 coal_plant_flames
   rotate: false
-  xy: 315, 98
-  size: 44, 98
-  orig: 44, 98
+  xy: 90, 294
+  size: 45, 98
+  orig: 45, 98
   offset: 0, 0
   index: 17
 grass
   rotate: false
-  xy: 360, 98
+  xy: 135, 294
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 0
 grass
   rotate: false
-  xy: 424, 98
+  xy: 0, 392
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 1
 grass
   rotate: false
-  xy: 0, 196
+  xy: 64, 392
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 2
 grass
   rotate: false
-  xy: 64, 196
+  xy: 128, 392
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 3
 grass
   rotate: false
-  xy: 128, 196
+  xy: 192, 392
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 4
 grass
   rotate: false
-  xy: 192, 196
+  xy: 0, 456
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 5
+house
+  rotate: false
+  xy: 64, 456
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
 wind_turbine_small
   rotate: false
-  xy: 256, 196
+  xy: 128, 456
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 0
 wind_turbine_small
   rotate: false
-  xy: 320, 196
+  xy: 192, 456
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 1
 wind_turbine_small
   rotate: false
-  xy: 384, 196
+  xy: 0, 520
   size: 64, 64
   orig: 64, 64
   offset: 0, 0
   index: 2
 wind_turbine_small
   rotate: false
-  xy: 448, 196
+  xy: 64, 520
   size: 64, 64
   orig: 64, 64
   offset: 0, 0

@@ -180,6 +180,7 @@
             <key type="filename">grass_3.png</key>
             <key type="filename">grass_4.png</key>
             <key type="filename">grass_5.png</key>
+            <key type="filename">house.png</key>
             <key type="filename">wind_turbine_small_0.png</key>
             <key type="filename">wind_turbine_small_1.png</key>
             <key type="filename">wind_turbine_small_2.png</key>
@@ -195,6 +196,37 @@
                 <rect>16,16,32,32</rect>
                 <key>scale9Paddings</key>
                 <rect>16,16,32,32</rect>
+                <key>scale9FromFile</key>
+                <false/>
+            </struct>
+            <key type="filename">coal_plant_flames_1.png</key>
+            <key type="filename">coal_plant_flames_10.png</key>
+            <key type="filename">coal_plant_flames_11.png</key>
+            <key type="filename">coal_plant_flames_12.png</key>
+            <key type="filename">coal_plant_flames_13.png</key>
+            <key type="filename">coal_plant_flames_14.png</key>
+            <key type="filename">coal_plant_flames_15.png</key>
+            <key type="filename">coal_plant_flames_16.png</key>
+            <key type="filename">coal_plant_flames_17.png</key>
+            <key type="filename">coal_plant_flames_2.png</key>
+            <key type="filename">coal_plant_flames_3.png</key>
+            <key type="filename">coal_plant_flames_4.png</key>
+            <key type="filename">coal_plant_flames_5.png</key>
+            <key type="filename">coal_plant_flames_6.png</key>
+            <key type="filename">coal_plant_flames_7.png</key>
+            <key type="filename">coal_plant_flames_8.png</key>
+            <key type="filename">coal_plant_flames_9.png</key>
+            <struct type="IndividualSpriteSettings">
+                <key>pivotPoint</key>
+                <point_f>0.5,0.5</point_f>
+                <key>spriteScale</key>
+                <double>1</double>
+                <key>scale9Enabled</key>
+                <false/>
+                <key>scale9Borders</key>
+                <rect>11,25,23,49</rect>
+                <key>scale9Paddings</key>
+                <rect>11,25,23,49</rect>
                 <key>scale9FromFile</key>
                 <false/>
             </struct>
@@ -216,6 +248,24 @@
                     <filename>wind_turbine_small_1.png</filename>
                     <filename>wind_turbine_small_2.png</filename>
                     <filename>wind_turbine_small_3.png</filename>
+                    <filename>coal_plant_flames_1.png</filename>
+                    <filename>coal_plant_flames_10.png</filename>
+                    <filename>coal_plant_flames_11.png</filename>
+                    <filename>coal_plant_flames_12.png</filename>
+                    <filename>coal_plant_flames_13.png</filename>
+                    <filename>coal_plant_flames_14.png</filename>
+                    <filename>coal_plant_flames_15.png</filename>
+                    <filename>coal_plant_flames_16.png</filename>
+                    <filename>coal_plant_flames_17.png</filename>
+                    <filename>coal_plant_flames_2.png</filename>
+                    <filename>coal_plant_flames_3.png</filename>
+                    <filename>coal_plant_flames_4.png</filename>
+                    <filename>coal_plant_flames_5.png</filename>
+                    <filename>coal_plant_flames_6.png</filename>
+                    <filename>coal_plant_flames_7.png</filename>
+                    <filename>coal_plant_flames_8.png</filename>
+                    <filename>coal_plant_flames_9.png</filename>
+                    <filename>house.png</filename>
                 </array>
             </struct>
         </map>

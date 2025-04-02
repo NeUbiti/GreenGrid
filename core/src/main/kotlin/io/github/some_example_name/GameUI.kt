@@ -62,10 +62,12 @@ class GameUI {
     // Create a list of building options.
     private val buildingOptionsList = listOf(
         BuildingOptions(texture = atlas.findRegion("wind_turbine_small", 0), name = "windTurbine", description = "Wind turbine", cost = 200f),
-        BuildingOptions(texture = atlas.findRegion("solar_panel_small", 0), name = "SolarPanel", description = "Solar panel", cost = 150f),
-        BuildingOptions(texture = atlas.findRegion("coal_plant", 0), name = "coalPlant", description = "Coal plant", cost = 100f)
+        BuildingOptions(texture = atlas.findRegion("solar_panel_small", 0), name = "solarPanel", description = "Solar panel", cost = 150f),
+        BuildingOptions(texture = atlas.findRegion("coal_plant", 0), name = "coalPlant", description = "Coal plant", cost = 100f),
+        BuildingOptions(texture = atlas.findRegion("house", -1), name = "house", description = "House", cost = 0f)
     )
     private var buildingMenuOpen = false
+    private var pendingMenuOpen = false
 
     // Crane button pressed timer variables.
     private var cranePressedTimer = 0f
@@ -80,7 +82,7 @@ class GameUI {
      * @param hasBatteries  If the player has batteries (default false).
      * @param battery The current battery level (0 to 1).
      */
-    fun updateUI(co2: Float, money: Int, energy: Float, hasBatteries: Boolean, battery: Float) {
+    fun updateUI(co2: Float, money: Int, energy: Float, hasBatteries: Boolean, battery: Float, pendingBuilding: String?) {
         this.co2 = when {
             co2 < 0f -> 0f
             co2 > 1f -> 1f
@@ -98,10 +100,12 @@ class GameUI {
             battery > 1f -> 1f
             else -> battery
         }
+        this.pendingMenuOpen = (pendingBuilding != null)
     }
 
+    // Locks map position/movement when menu is open
     fun isMenuOpen(): Boolean {
-        return buildingMenuOpen
+        return (buildingMenuOpen)
     }
 
 
@@ -163,35 +167,37 @@ class GameUI {
 
         // Draw energy slider and battery icon.
         batch.draw(energySliderIcon, screenWidth / 2 + (85 + energy * 81) * scale, screenHeight - 17 * scale, 11 * scale, 11 * scale)
-        batch.draw(batteryIcon, screenWidth / 2 + (86 + energy * 81) * scale, screenHeight - 24 * scale, 10 * scale, 6 * scale)
+        if (hasBatteries) {batch.draw(batteryIcon, screenWidth / 2 + (86 + energy * 81) * scale, screenHeight - 24 * scale, 10 * scale, 6 * scale)}
 
         // Draw money text.
         val textX = screenWidth / 2 - 22 * scale
         val textY = screenHeight - 12 * scale + moneyLayout.height / 2
         font.draw(batch, moneyText, textX, textY)
 
-        // Draw the crane button in the bottom right corner.
-        val buttonWidth = craneButton.width * scale
-        val buttonHeight = craneButton.height * scale
-        val buttonX = screenWidth - buttonWidth - 20f  // 20 pixel margin from right edge
-        val buttonY = 20f  // 20 pixel margin from bottom edge
+        if (!pendingMenuOpen) {
+            // Draw the crane button in the bottom right corner.
+            val buttonWidth = craneButton.width * scale
+            val buttonHeight = craneButton.height * scale
+            val buttonX = screenWidth - buttonWidth - 20f  // 20 pixel margin from right edge
+            val buttonY = 20f  // 20 pixel margin from bottom edge
 
-        // Choose the texture based on whether the button is pressed.
-        val currentCraneTexture = if (cranePressedTimer > 0) cranePushed else craneButton
-        batch.draw(currentCraneTexture, buttonX, buttonY, buttonWidth, buttonHeight)
+            // Choose the texture based on whether the button is pressed.
+            val currentCraneTexture = if (cranePressedTimer > 0) cranePushed else craneButton
+            batch.draw(currentCraneTexture, buttonX, buttonY, buttonWidth, buttonHeight)
 
-        // Check for button click.
-        if (Gdx.input.justTouched()) {
-            val touchX = Gdx.input.x.toFloat()
-            val touchY = screenHeight - Gdx.input.y.toFloat() // convert input Y coordinate
-            if (touchX in buttonX..(buttonX + buttonWidth) &&
-                touchY in buttonY..(buttonY + buttonHeight)
-            ) {
-                // Set the pressed timer so that the pushed texture is shown.
-                cranePressedTimer = cranePressDuration
+            // Check for button click.
+            if (Gdx.input.justTouched()) {
+                val touchX = Gdx.input.x.toFloat()
+                val touchY = screenHeight - Gdx.input.y.toFloat() // convert input Y coordinate
+                if (touchX in buttonX..(buttonX + buttonWidth) &&
+                    touchY in buttonY..(buttonY + buttonHeight)
+                ) {
+                    // Set the pressed timer so that the pushed texture is shown.
+                    cranePressedTimer = cranePressDuration
 
-                // Toggle building menu.
-                buildingMenuOpen = !buildingMenuOpen
+                    // Toggle building menu.
+                    buildingMenuOpen = !buildingMenuOpen
+                }
             }
         }
 

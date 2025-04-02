@@ -4,8 +4,10 @@ import com.badlogic.gdx.Gdx
 import com.badlogic.gdx.Screen
 import com.badlogic.gdx.audio.Music
 import com.badlogic.gdx.graphics.Color
+import com.badlogic.gdx.graphics.Pixmap
 import com.badlogic.gdx.graphics.Texture
 import com.badlogic.gdx.graphics.g2d.Animation
+import com.badlogic.gdx.graphics.g2d.BitmapFont
 import com.badlogic.gdx.graphics.g2d.SpriteBatch
 import com.badlogic.gdx.graphics.g2d.TextureAtlas
 import com.badlogic.gdx.graphics.g2d.TextureRegion
@@ -15,6 +17,7 @@ import com.badlogic.gdx.utils.Json
 import kotlin.math.abs
 import kotlin.math.sin
 import kotlin.math.PI
+import kotlinx.coroutines.*
 
 class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListener {
     // === Time & World Settings ===
@@ -28,7 +31,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     private val altitudeScale = 16f
 
     // Seed for noise generation.
-    private val noiseSeed = abs(java.util.Random().nextInt()) % 10000
+    private var noiseSeed = abs(java.util.Random().nextInt()) % 10000
 
     // === Data Classes ===
     // Now each tile holds altitude, temperature and humidity.
@@ -41,9 +44,17 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         var humidity: Float = 50f             // Humidity value for the tile.
     )
 
+    // Updated GameState with default values so that a no-arg constructor is available.
+    data class GameState(
+        var tileMap: Array<Array<TileData>> = emptyArray(),
+        var noiseSeed: Int = 0,
+        var money: Float = 500f,
+        var energy: Float = 0f,
+        var co2: Float = 0f
+    )
+
     // The tilemap is a 2D array of TileData.
     private lateinit var tileMap: Array<Array<TileData>>
-    private val buildingCountMap = mutableMapOf<String, Int>()
 
     // === Texture & Animation Setup ===
     // Lookup map for static textures.
@@ -80,6 +91,12 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
             0.3f,
             com.badlogic.gdx.utils.Array<TextureRegion>().apply {
                 add(atlas.findRegion("coal_plant", 0))
+            }
+        ),
+        "house" to Animation(
+            0.3f,
+            com.badlogic.gdx.utils.Array<TextureRegion>().apply {
+                add(atlas.findRegion("house", -1))
             }
         )
     )
@@ -126,39 +143,89 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
     private val uiBatch = SpriteBatch()
     private val testBatch = SpriteBatch()
     private val lightBatch = SpriteBatch()
+    private val font = BitmapFont(Gdx.files.internal("default.fnt"))
 
     // Declare variables to hold your background tracks.
     private lateinit var musicPlaylist: List<Music>
     private var currentTrackIndex = 0
 
-    private var co2 = 0f
-    private var money = 0
-    private var energy = 0f
+    private var pendingBuilding: String? = null
+    private var pendingTileX: Int = 0
+    private var pendingTileY: Int = 0
+    private var pendingCost: Int = 0
+    private var pendingValid: Boolean = false
+    private var pendingEfficiency: Float = 0f
+    private lateinit var overlayColor: Color
+    private lateinit var whitePixel: Texture
+    private lateinit var confirmTexture: Texture
+    private lateinit var cancelTexture: Texture
+
+    private var co2 = 0f // in %
+    private var co2level = 0f // 0 to 1
+    private var money = 500f // in $
+    private var energy = 0f // in kWh
+    private var energylevel = 0f // 0 to 1
+    private var lastEnergyProduced = 0f // in kWh
+    private var lastEnergyUsed = 0f // in kWh
     private var hasBatteries = false
-    private var battery = 0f
+    private var battery = 0f // in kWh
+    private var batterylevel = 0f // 0 to 1
+
+    // Rates for building effects (per second).
+    private val windTurbineCost = 300
+    private val windTurbineEnergyRate = 1.0f
+    private val windTurbineCO2Rate = 0.1f
+
+    private val coalPlantCost = 100
+    private val coalPlantEnergyRate = 2.0f
+    private val coalPlantCO2Rate = 2.0f
+
+    private val solarPanelCost = 200
+    private val solarPanelEnergyRate = 0.5f
+    private val solarPanelCO2Rate = 0.1f
+
+    private val houseEnergyRate = 1.0f
+    private val energyPrice = 1.0f
+
+    // Timer variables for periodic saving (avoid saving every frame).
+    private val SAVE_INTERVAL = 5f // seconds
+    private var saveTimer = 0f
 
     override fun show() {
         for (region in atlas.regions) {
             region.texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest)
         }
 
-        // Attempt to load the tilemap from a JSON file.
-        val file = Gdx.files.local("tilemap.json")
-        if (file.exists()) {
-            val json = Json()
-            tileMap = json.fromJson(Array<Array<TileData>>::class.java, file.readString())
+        // Load saved game state if available.
+        if (Gdx.files.local("game_state.json").exists()) {
+            loadGameState()
         } else {
-            // Generate the island using perlin noise.
-            tileMap = generateIslandTileMap(mapWidth, mapHeight)
+            // Attempt to load the tilemap from a JSON file.
+            val tilemapFile = Gdx.files.local("tilemap.json")
+            if (tilemapFile.exists()) {
+                val json = Json()
+                tileMap = json.fromJson(Array<Array<TileData>>::class.java, tilemapFile.readString())
+            } else {
+                // Generate the island using perlin noise.
+                tileMap = generateIslandTileMap(mapWidth, mapHeight)
+            }
         }
 
-        placeBuilding("windTurbine")
 
 
         // Initialize the UI overlay.
         gameUI = GameUI()
         gameUI.onPlaceBuilding = { buildingTile ->
-            placeBuilding(buildingTile)}
+            startPlacingBuilding(buildingTile)
+        }
+
+        val pixmap = Pixmap(1, 1, Pixmap.Format.RGBA8888)
+        pixmap.setColor(Color.WHITE)
+        pixmap.fill()
+        whitePixel = Texture(pixmap)
+        pixmap.dispose()
+        confirmTexture = Texture(Gdx.files.internal("confirm.png"))
+        cancelTexture = Texture(Gdx.files.internal("cancel.png"))
 
         testUI = Test()
         // Set up the GestureDetector to capture touch events.
@@ -166,10 +233,21 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
 
         loadBackgroundMusic()
         startPlaylist()
+
+        // Save state at the end of show() to persist the initial setup.
+        saveGameStateAsync()
     }
 
     override fun render(delta: Float) {
         elapsedTime += delta
+
+        // Update periodic saving timer.
+        saveTimer += delta
+        if (saveTimer >= SAVE_INTERVAL) {
+            saveGameStateAsync()
+            saveTimer = 0f
+        }
+
         // Update camera offset via panning/inertia...
         if (!Gdx.input.isTouched) {
             offsetX += velocityX * delta
@@ -184,7 +262,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         clampCamera()
 
         // Compute the day/night cycle parameters outside the batch blocks.
-        val cycleDuration = 10f
+        val cycleDuration = 60f * 4f // default: 60f * 4f (4 minutes)
         val t = (elapsedTime % cycleDuration) / cycleDuration
         val dayNightAlpha = when {
             t < 0.5f -> 0f
@@ -200,6 +278,23 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
             (1 - dayNightAlpha) * dayColor.b + dayNightAlpha * nightColor.b,
             1f
         )
+
+        if (pendingBuilding != null) {
+            // Determine if the placement is valid (here valid if no building exists at the tile).
+
+            val centerTile = screenToTile(Gdx.graphics.width.toFloat() / 2, Gdx.graphics.height.toFloat() / 2)
+            pendingTileX = centerTile.x.toInt()
+            pendingTileY = centerTile.y.toInt()
+            val currentTile = tileMap[pendingTileX][pendingTileY]
+            pendingCost = when (pendingBuilding) {
+                "windTurbine" -> {windTurbineCost}
+                "coalPlant" -> {coalPlantCost}
+                "solarPanel" -> {solarPanelCost}
+                else -> {0}
+            }
+            pendingValid = currentTile.animationId == null && money >= pendingCost
+            overlayColor = if (pendingValid) Color(0f, 1f, 0f, 0.5f) else Color(1f, 0f, 0f, 0.5f)
+        }
 
         game.batch.begin()
 
@@ -227,8 +322,37 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
                         drawTile(region, x, y, tile.altitude)
                     }
                 }
+                if (pendingBuilding != null && x == pendingTileX && y == pendingTileY) {
+                    game.batch.color = overlayColor
+                    animationMap[pendingBuilding]?.getKeyFrame(0f, true)?.let { region ->
+                        drawTile(region, x, y, tile.altitude)
+                    }
+                }
                 // Restore the original color.
                 game.batch.color = originalColor
+
+                when (tile.animationId) {
+                    "windTurbine" -> {
+                        energy += windTurbineEnergyRate * delta
+                        lastEnergyProduced += windTurbineEnergyRate * delta
+                        co2 += windTurbineCO2Rate * delta
+                    }
+                    "coalPlant" -> {
+                        energy += coalPlantEnergyRate * delta
+                        lastEnergyProduced += coalPlantEnergyRate * delta
+                        co2 += coalPlantCO2Rate * delta
+                    }
+                    "solarPanel" -> {
+                        energy += solarPanelEnergyRate * delta
+                        lastEnergyProduced += solarPanelEnergyRate * delta
+                        co2 += solarPanelCO2Rate * delta
+                    }
+                    "house" -> {
+                        energy -= houseEnergyRate * delta * (1f - dayNightAlpha * 0.5f)
+                        lastEnergyUsed += houseEnergyRate * delta * (1f - dayNightAlpha * 0.5f)
+                        money += energyPrice * delta
+                    }
+                }
             }
         }
 
@@ -257,20 +381,53 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         }
         lightBatch.end()
 
-        // Update and render the UI overlay.
-        //testUI.render(testBatch)
-        co2 += 0.01f
-        money += 1
-        energy += 0.01f
-        hasBatteries = true
-        battery += 0.001f
+        if (pendingBuilding != null) {
+            uiBatch.begin()
 
-        if (co2 > 1.5f) {co2 = -0.5f}
-        if (energy > 1.5f) {energy = -0.5f}
-        if (battery > 1.5f) {battery = -0.5f}
+            // Draw confirm and cancel buttons using texture icons.
+            val screenWidth = Gdx.graphics.width.toFloat()
+            val screenHeight = Gdx.graphics.height.toFloat()
+            val buttonScale = tileScale
+            val buttonWidth = confirmTexture.width * buttonScale
+            val buttonHeight = confirmTexture.height * buttonScale
+            val confirmX = screenWidth / 2 - buttonWidth - 10f
+            val cancelX = screenWidth / 2 + 10f
+            val buttonY = 50f
+            uiBatch.draw(confirmTexture, confirmX, buttonY, buttonWidth, buttonHeight)
+            uiBatch.draw(cancelTexture, cancelX, buttonY, buttonWidth, buttonHeight)
 
-        gameUI.updateUI(co2, money, energy, hasBatteries, battery)
+            // Draw efficiency text if placing a wind turbine.
+            if (pendingBuilding == "windTurbine") {
+                val tileAltitude = tileMap[pendingTileX][pendingTileY].altitude
+                // Convert altitude to an efficiency percentage (e.g., 0 becomes 50%, 1 becomes 100%)
+                pendingEfficiency = (tileAltitude * 50 + 50).coerceAtMost(100f).coerceAtLeast(0f)
+                val efficiencyText = "Efficiency: ${pendingEfficiency.toInt()}%"
+                // Use a GlyphLayout to measure the text height
+                val layout = com.badlogic.gdx.graphics.g2d.GlyphLayout(font, efficiencyText)
+                font.draw(uiBatch, efficiencyText, screenWidth / 2 - layout.width / 2, buttonY + buttonHeight + layout.height + 20f)
+            }
+
+            uiBatch.end()
+
+            // Check for touch input on the confirm and cancel buttons.
+            if (Gdx.input.justTouched()) {
+                val touchX = Gdx.input.x.toFloat()
+                val touchY = screenHeight - Gdx.input.y.toFloat()
+                if (touchX in confirmX..(confirmX + buttonWidth) && touchY in buttonY..(buttonY + buttonHeight)) {
+                    if (pendingValid) confirmPlacement() else cancelPlacement()
+                } else if (touchX in cancelX..(cancelX + buttonWidth) && touchY in buttonY..(buttonY + buttonHeight)) {
+                    cancelPlacement()
+                }
+            }
+        }
+
+        energylevel = lastEnergyProduced / lastEnergyUsed / 2f
+        co2level = co2 * 10f
+
+        gameUI.updateUI(co2level, money.toInt(), energylevel, hasBatteries, batterylevel, pendingBuilding)
         gameUI.render(uiBatch)
+        lastEnergyProduced = 0f
+        lastEnergyUsed = 0f
     }
 
     // Add the clampCamera function.
@@ -423,6 +580,41 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         return Vector2(tileX, tileY)
     }
 
+    // New function to save game state.
+    private fun saveGameState() {
+        val gameState = GameState(tileMap, noiseSeed, money, energy, co2)
+        val json = Json()
+        val jsonString = json.prettyPrint(gameState)
+        Gdx.files.local("game_state.json").writeString(jsonString, false)
+        Gdx.app.log("SaveGame", "Game state saved.")
+    }
+
+    fun saveGameStateAsync() {
+        GlobalScope.launch(Dispatchers.IO) {
+            saveGameState() // your existing synchronous saveGameState function
+        }
+    }
+
+    // New function to load the game state.
+    private fun loadGameState() {
+        val file = Gdx.files.local("game_state.json")
+        if (file.exists()) {
+            val json = Json()
+            val jsonString = file.readString()
+            try {
+                val loadedState = json.fromJson(GameState::class.java, jsonString)
+                tileMap = loadedState.tileMap
+                noiseSeed = loadedState.noiseSeed
+                money = loadedState.money
+                energy = loadedState.energy
+                co2 = loadedState.co2
+                Gdx.app.log("LoadGame", "Game state loaded.")
+            } catch (e: Exception) {
+                Gdx.app.log("LoadGame", "Error loading game state: ${e.message}")
+            }
+        }
+    }
+
     // Call this method (e.g., from your create() method) to load the tracks.
     fun loadBackgroundMusic() {
         val gardenMusic = Gdx.audio.newMusic(Gdx.files.internal("Garden.mp3"))
@@ -435,7 +627,7 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         coalMusic.isLooping = false
 
         // Create the playlist.
-        musicPlaylist = listOf(windmillMusic, gardenMusic, coalMusic)
+        musicPlaylist = listOf(gardenMusic, windmillMusic, coalMusic)
 
         // Set an on-completion listener for each track.
         musicPlaylist.forEach { music ->
@@ -463,43 +655,25 @@ class GameScreen(private val game: Main) : Screen, GestureDetector.GestureListen
         musicPlaylist[currentTrackIndex].play()
     }
 
-    /**
-     * Places a building on the tile at (clickedTileX, clickedTileY).
-     * The provided buildingTile string is assigned to tileMap[clickedTileX][clickedTileY].animationId.
-     * The count for that building type is incremented in buildingCountMap.
-     *
-     * @param buildingTile The identifier of the building (e.g., "windTurbineAnim", "solarPanelAnim").
-     */
-    fun placeBuilding(buildingTile: String) {
-        Gdx.app.log("placeBuilding", buildingTile)
-        // Ensure that the clicked tile coordinates are within the tilemap bounds.
-        val clickedTile = screenToTile(Gdx.graphics.width.toFloat()/2, Gdx.graphics.height.toFloat()/2)
-        if (clickedTile.x.toInt() in 0 until mapWidth && clickedTile.y.toInt() in 0 until mapHeight) {
-            tileMap[clickedTile.x.toInt()][clickedTile.y.toInt()].animationId = buildingTile
-            buildingCountMap[buildingTile] = buildingCountMap.getOrDefault(buildingTile, 0) + 1
+    private fun startPlacingBuilding(buildingTile: String) {
+        pendingBuilding = buildingTile
+        // For example, use the center tile as the preview location.
+        val centerTile = screenToTile(Gdx.graphics.width.toFloat() / 2, Gdx.graphics.height.toFloat() / 2)
+        pendingTileX = centerTile.x.toInt()
+        pendingTileY = centerTile.y.toInt()
+    }
+
+    private fun confirmPlacement() {
+        money -= pendingCost
+        pendingCost = 0
+        if (pendingBuilding != null) {
+            tileMap[pendingTileX][pendingTileY].animationId = pendingBuilding
+            pendingBuilding = null
         }
     }
 
-    /**
-     * Removes a building from the tile at (clickedTileX, clickedTileY).
-     * This sets the tile's animationId to null (removing the building) and decrements the count for that building type.
-     *
-     * @param buildingTile The identifier of the building to remove.
-     */
-    fun removeBuilding(buildingTile: String) {
-        if (clickedTileX in 0 until mapWidth && clickedTileY in 0 until mapHeight) {
-            // Remove the building from the tile.
-            tileMap[clickedTileX][clickedTileY].animationId = null
-
-            // Decrement the count in the buildingCountMap.
-            if (buildingCountMap.containsKey(buildingTile)) {
-                buildingCountMap[buildingTile] = buildingCountMap[buildingTile]!! - 1
-                // If the count drops to zero, remove the key.
-                if (buildingCountMap[buildingTile]!! <= 0) {
-                    buildingCountMap.remove(buildingTile)
-                }
-            }
-        }
+    private fun cancelPlacement() {
+        pendingBuilding = null
     }
 
     override fun resize(width: Int, height: Int) { }
